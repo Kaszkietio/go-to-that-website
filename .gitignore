@@ -1,3 +1,6 @@
 .vscode/
 data/*
 NOTES.md
+bin
+bloomfilters
+*.bin

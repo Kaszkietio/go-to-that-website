@@ -7,7 +7,7 @@ import (
 	"os"
 	"strconv"
 
-	bloom "github.com/kaszkietio/GoToThatWebsite/internal/bloomfilter"
+	bloom "github.com/kaszkietio/go-to-that-website/internal/bloomfilter"
 )
 
 func calculateBloomFilterSize(n int, fp float64) int {
@@ -22,8 +22,14 @@ func calculateNumberOfHashFunctionsForBloomFilter(fp float64) int {
 
 func main() {
 	args := os.Args
-	if len(args) != 3 {
-		fmt.Fprintf(os.Stderr, "Usage: %s <data-path> <false-positive-rate>", args[0])
+	if len(args) != 4 {
+		fmt.Fprintf(os.Stderr, "Usage: %s <data-path> <false-positive-rate> <output-path>", args[0])
+		os.Exit(1)
+	}
+
+	fp, err := strconv.ParseFloat(args[2], 64)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing false positive rate: %v", err)
 		os.Exit(1)
 	}
 
@@ -40,17 +46,23 @@ func main() {
 		lines = append(lines, scanner.Text())
 	}
 
-	fp, err := strconv.ParseFloat(args[2], 64)
-	if err != nil {
-
-	}
 	n := len(lines)
 	m := calculateBloomFilterSize(n, fp)                  // size of the bloom filter
 	k := calculateNumberOfHashFunctionsForBloomFilter(fp) // number of hash functions
+
+	fmt.Printf("Number of lines: %d\n", n)
+	fmt.Printf("Bloom filter size (m): %d\n", m)
+	fmt.Printf("Number of hash functions (k): %d\n", k)
 
 	filter := bloom.NewBloomFilter(m, k)
 	for _, line := range lines {
 		filter.Add(line)
 	}
 
+	err = filter.Save(args[3])
+	if err != nil {
+		fmt.Printf("Error saving bloom filter: %v", err)
+		os.Exit(1)
+	}
+	fmt.Printf("SUCCESS: Bloom filter created with size %d and %d hash functions.\n", m, k)
 }

@@ -2,33 +2,41 @@ package bloomfilter
 
 import (
 	"encoding/binary"
-	"hash/maphash"
+	"math/rand/v2"
 	"os"
+
+	"github.com/cespare/xxhash/v2"
 )
 
 type BloomFilter struct {
-	array []bool
-	seeds []maphash.Seed
+	array  []bool
+	hashes []uint64
 }
 
 func NewBloomFilter(arrayLength int, numHashFunctions int) *BloomFilter {
-	seeds := make([]maphash.Seed, numHashFunctions)
+	hashes := make([]uint64, numHashFunctions)
+
 	for i := range numHashFunctions {
-		seeds[i] = maphash.MakeSeed()
+		hashes[i] = rand.Uint64()
 	}
 
 	return &BloomFilter{
-		array: make([]bool, arrayLength),
-		seeds: seeds,
+		array:  make([]bool, arrayLength),
+		hashes: hashes,
 	}
 }
 
 func (bf *BloomFilter) GetIndexes(s string) []uint64 {
 	m := uint64(len(bf.array))
-	k := len(bf.seeds)
+	k := len(bf.hashes)
 	indexes := make([]uint64, k)
-	for i, seed := range bf.seeds {
-		idx := maphash.String(seed, s) % m
+	for i, hash := range bf.hashes {
+		h := xxhash.NewWithSeed(hash)
+		_, err := h.WriteString(s)
+		if err != nil {
+			panic(err)
+		}
+		idx := h.Sum64() % m
 		indexes[i] = idx
 	}
 	return indexes
@@ -72,7 +80,7 @@ func (bf *BloomFilter) Save(path string) error {
 	defer file.Close()
 
 	m := len(bf.array)
-	k := len(bf.seeds)
+	k := len(bf.hashes)
 
 	err = binary.Write(file, binary.NativeEndian, int64(m))
 	if err != nil {
@@ -91,7 +99,7 @@ func (bf *BloomFilter) Save(path string) error {
 		return nil
 	}
 
-	for _, seed := range bf.seeds {
+	for _, seed := range bf.hashes {
 		err = binary.Write(file, binary.NativeEndian, seed)
 		if err != nil {
 			return err
@@ -128,16 +136,16 @@ func Load(path string) (bf *BloomFilter, err error) {
 		return nil, err
 	}
 
-	seeds := make([]maphash.Seed, m)
+	hashes := make([]uint64, k)
 	for i := range k {
-		err = binary.Read(file, binary.NativeEndian, &seeds[i])
+		err = binary.Read(file, binary.NativeEndian, &hashes[i])
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return &BloomFilter{
-		array: array,
-		seeds: seeds,
+		array:  array,
+		hashes: hashes,
 	}, nil
 }
